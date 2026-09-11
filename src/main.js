@@ -59,11 +59,11 @@ function attendanceMessage() {
   return `Attend the next ${needed} lecture${needed === 1 ? '' : 's'} to reach ${target}%.`
 }
 
-function renderLogin(error = '') {
+function renderLogin(error = '', invalidField = '') {
   document.querySelector('#app').innerHTML = `
-    <div class="login-shell">
-      <section class="login-visual"><a class="brand login-brand" href="#"><span class="brand-mark">S</span><span>Student<span class="brand-light">OS</span></span></a><div class="login-message"><p class="eyebrow">Your personal college command center</p><h1>Your college life,<br><em>organized.</em></h1><p>Manage attendance, timetable, assignments and important college updates — all in one place.</p></div><div class="login-orbit orbit-one"></div><div class="login-orbit orbit-two"></div><div class="login-visual-note"><span class="status-dot"></span> Your day, made clearer</div></section>
-      <section class="login-panel"><div class="login-card"><div class="login-card-heading"><p class="eyebrow">StudentOS workspace</p><h2>Welcome back</h2><p>Sign in to continue to StudentOS</p></div><form data-form="login" novalidate><label>Email / Student ID<input name="identifier" type="text" autocomplete="username" placeholder="you@college.edu" aria-describedby="login-error" required></label><label>Password<span class="password-field"><input name="password" type="password" autocomplete="current-password" placeholder="Enter your password" aria-describedby="login-error" required><button type="button" class="show-password" data-action="toggle-password" aria-label="Show password">Show</button></span></label><div class="login-options"><label class="remember-option"><input name="remember" type="checkbox"><span class="checkbox"></span> Remember me</label><button type="button" class="login-link">Forgot password?</button></div><p class="login-error" id="login-error" role="alert">${escapeHtml(error)}</p><button class="primary-button login-submit" type="submit">Login <span>→</span></button></form><p class="signup-prompt">Don't have an account? <button type="button" class="login-link">Sign up</button></p></div><p class="login-footer">Private workspace · Saved on this device</p></section>
+    <div class="login-shell" style="--pointer-x: 50%; --pointer-y: 50%;">
+      <section class="login-visual"><a class="brand login-brand" href="#"><span class="brand-mark">S</span><span>Student<span class="brand-light">OS</span></span></a><div class="login-message"><p class="eyebrow">Your personal college command center</p><h1>Your college life,<br><em>organized.</em></h1><p>Manage attendance, timetable, assignments and important college updates — all in one place.</p></div><div class="login-art" aria-hidden="true"><span class="art-ring"></span><span class="art-card art-card-one"></span><span class="art-card art-card-two"></span><span class="art-pencil"></span><span class="art-star">✦</span><span class="art-dot"></span></div><div class="login-orbit orbit-one"></div><div class="login-orbit orbit-two"></div><div class="login-visual-note"><span class="status-dot"></span> Your day, made clearer</div></section>
+      <section class="login-panel"><div class="login-card"><div class="login-card-heading"><div class="login-kicker"><span class="kicker-dot"></span> Personal student workspace</div><h2>Welcome back</h2><p>Sign in to continue to StudentOS</p></div><form data-form="login" novalidate><label class="login-field ${invalidField === 'identifier' ? 'is-invalid' : ''}" for="login-identifier"><span class="field-icon" aria-hidden="true">@</span><span class="field-label">Email / Student ID</span><input id="login-identifier" name="identifier" type="text" autocomplete="username" placeholder=" " aria-describedby="login-error" required></label><label class="login-field ${invalidField === 'password' ? 'is-invalid' : ''}" for="login-password"><span class="field-icon" aria-hidden="true">⌑</span><span class="field-label">Password</span><span class="password-field"><input id="login-password" name="password" type="password" autocomplete="current-password" placeholder=" " aria-describedby="login-error" required><button type="button" class="show-password" data-action="toggle-password" aria-label="Show password">Show</button></span></label><div class="login-options"><label class="remember-option"><input name="remember" type="checkbox"><span class="checkbox"></span> Remember me</label><button type="button" class="login-link">Forgot password?</button></div><p class="login-error" id="login-error" role="alert">${escapeHtml(error)}</p><button class="primary-button login-submit" type="submit">Login <span>→</span></button></form><div class="login-assurance"><span>✓</span><span><strong>Ready when you are</strong><small>Your workspace stays saved on this device.</small></span></div><p class="signup-prompt">Don't have an account? <button type="button" class="login-link">Sign up</button></p></div><p class="login-footer">Private workspace · Saved on this device</p></section>
     </div>`
 }
 
@@ -121,6 +121,13 @@ document.addEventListener('input', event => {
   document.querySelectorAll('.lecture, .task-row, .notice').forEach(item => { item.hidden = query && !item.textContent.toLowerCase().includes(query) })
 })
 
+document.addEventListener('pointermove', event => {
+  const shell = document.querySelector('.login-shell')
+  if (!shell || event.pointerType === 'touch' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  shell.style.setProperty('--pointer-x', `${event.clientX}px`)
+  shell.style.setProperty('--pointer-y', `${event.clientY}px`)
+})
+
 document.addEventListener('change', event => {
   const form = event.target.closest('[data-form]')
   if (form?.dataset.form === 'college-day' && event.target.name === 'status') {
@@ -141,9 +148,16 @@ document.addEventListener('submit', event => {
   if (form.dataset.form === 'login') {
     const identifier = values.identifier.trim()
     const error = !identifier ? 'Enter your email or student ID.' : !values.password ? 'Enter your password.' : identifier.includes('@') && !/^\S+@\S+\.\S+$/.test(identifier) ? 'Enter a valid email or student ID.' : ''
-    if (error) { renderLogin(error); return }
-    if (values.remember === 'on') { localStorage.setItem(sessionKey, 'remembered'); sessionStorage.removeItem(sessionKey) } else { sessionStorage.setItem(sessionKey, 'active'); localStorage.removeItem(sessionKey) }
-    renderDashboard()
+    const invalidField = !identifier || (identifier.includes('@') && !/^\S+@\S+\.\S+$/.test(identifier)) ? 'identifier' : 'password'
+    if (error) { renderLogin(error, invalidField); return }
+    const submitButton = form.querySelector('.login-submit')
+    submitButton.disabled = true
+    submitButton.classList.add('is-loading')
+    submitButton.innerHTML = 'Signing in<span class="loading-dots">...</span>'
+    setTimeout(() => {
+      if (values.remember === 'on') { localStorage.setItem(sessionKey, 'remembered'); sessionStorage.removeItem(sessionKey) } else { sessionStorage.setItem(sessionKey, 'active'); localStorage.removeItem(sessionKey) }
+      renderDashboard()
+    }, 450)
     return
   }
   if (form.dataset.form === 'college-day') {
@@ -159,7 +173,7 @@ document.addEventListener('submit', event => {
   if (form.dataset.form === 'attendance') state.attendance = { conducted: Math.max(0, Number(values.conducted)), attended: Math.min(Number(values.attended), Number(values.conducted)), target: Math.min(100, Math.max(1, Number(values.target))) }
   if (form.dataset.form === 'task') state.tasks.push({ id: crypto.randomUUID(), title: values.title, dueDate: values.dueDate, completed: false })
   if (form.dataset.form === 'notice') state.notices.unshift({ id: crypto.randomUUID(), title: values.title, details: values.details, deadline: values.deadline })
-  save(); render()
+  save(); renderDashboard()
 })
 
 if (localStorage.getItem(sessionKey) === 'remembered' || sessionStorage.getItem(sessionKey) === 'active') renderDashboard()
